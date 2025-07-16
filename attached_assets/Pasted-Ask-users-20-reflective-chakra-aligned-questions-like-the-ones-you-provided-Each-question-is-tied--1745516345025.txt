@@ -1,0 +1,67 @@
+Ask users 20+ reflective chakra-aligned questions like the ones you provided. Each question is tied to a chakra center:
+
+
+Chakra	Sample Questions
+Root (Muladhara)	“Are you comfortable with routine activities like paying bills?”
+“Do you feel the universe is a safe place?”
+Sacral (Svadhisthana)	“Do you feel guilty about indulging in pleasurable activities like self-care or rest?”
+Solar Plexus (Manipura)	“Are you mostly able to be assertive when necessary?”
+Heart (Anahata)	“Do you tend to keep people at a distance?”
+Throat (Vishuddha)	“Are you often told to speak loudly and clearly?”
+“Do you feel good about expressing yourself through art, voice, or writing?”
+Third Eye (Ajna)	“Do you frequently rely on intuition and logic to make decisions?”
+“Do you like to ideate or brainstorm creative solutions?”
+Crown (Sahasrara)	“Do you seek to understand higher spiritual truths like enlightenment?”
+“Do you feel all events are meaningful and intentional?”
+🧠 Step 2: Hypothetical Scenarios (Behavior vs Belief Check)
+Craft scenario-based questions to test how users would behave in real life compared to what they claim.
+
+Examples by Chakra:
+
+
+Chakra	Hypothetical Prompt
+Root	“You suddenly lose your job. How do you respond in the first 3 days emotionally and practically?”
+Sacral	“You get invited to a spontaneous beach trip, but you had planned a productive weekend. What do you do?”
+Solar Plexus	“A friend constantly dominates conversations. Do you speak up or stay silent?”
+Heart	“A loved one deeply hurt you. Do you express your pain, withdraw, or forgive quickly?”
+Throat	“You’re asked to give a 5-minute talk at a surprise event. How do you handle it?”
+Third Eye	“You have two options—one logical and one intuitive. How do you decide?”
+Crown	“A major event disrupts your life’s path. Do you see chaos, or divine realignment?”
+🧾 Step 3: Emotional + Energetic Response Logging
+Record:
+
+Language tone (hesitant, confident, vague, detailed)
+
+Polarity (negative, neutral, positive)
+
+Chakra keywords (e.g., "trust," "guilt," "truth")
+
+🔄 Step 4: Pattern Recognition + Chakra Strength Map
+Generate a heatmap or report:
+
+Overactive, Balanced, or Blocked states
+
+Chakra that needs healing or strengthening
+
+Progress across sessions (if history exists)
+
+Example output:
+
+🔴 Root Chakra: Underactive — insecurity around survival/safety
+🔵 Throat Chakra: Balanced — confident in expression
+
+🌱 Step 5: Personalized Daily Healing Plan
+Based on the analysis, generate:
+
+Affirmations (e.g., for Solar Plexus: “I am powerful and in control of my choices.”)
+
+Journaling Prompts (e.g., “Where do I give away my power, and why?”)
+
+Action Steps (e.g., “Practice assertiveness in one conversation today.”)
+
+✅ Ready-to-Use Prompt Snippet Example (Throat Chakra)
+Q1: Do you feel good about expressing yourself through speaking, singing, writing, or art?
+
+Q2 (Follow-Up Hypothetical): Imagine someone publicly dismisses your opinion in a group. What do you do next?
+
+Q3 (Analysis): Based on your responses, how often do you feel heard or validated when expressing your truth?
