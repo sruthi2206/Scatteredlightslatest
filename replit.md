@@ -16,7 +16,8 @@ Scattered Lights is a full-stack web application focused on emotional healing, c
 ✓ Migrated from SendGrid to SMTP-based email service using Nodemailer
 ✓ Implemented secure password reset flow with email tokens
 ✓ Added welcome emails for new user registrations
-✓ Email service configured with user's SMTP server (email.storyweb.in:587)
+❌ Email service configured with user's SMTP server (email.storyweb.in:587) - connection timeout from Replit infrastructure
+📝 SMTP Issue: Server responds normally but authentication times out - likely IP restrictions or firewall blocking Replit
 
 **Note**: Development mode shows React context errors due to Vite hot-reload conflicts, but production build works flawlessly. Use production preview for testing.
 

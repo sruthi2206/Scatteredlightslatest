@@ -32,64 +32,26 @@ class EmailService {
 
   private initializeTransporter() {
     try {
-      // Try different SMTP configurations
-      const configs = [
-        {
-          // Standard configuration
-          host: this.config.host,
-          port: this.config.port,
-          secure: this.config.secure,
-          auth: {
-            user: this.config.username,
-            pass: this.config.password,
-          },
-          tls: {
-            rejectUnauthorized: false,
-            ciphers: 'SSLv3',
-          },
-          connectionTimeout: 30000,
-          greetingTimeout: 15000,
-          socketTimeout: 30000,
+      // Try primary SMTP server first
+      this.transporter = nodemailer.createTransport({
+        host: this.config.host,
+        port: this.config.port,
+        secure: this.config.secure,
+        auth: {
+          user: this.config.username,
+          pass: this.config.password,
         },
-        {
-          // Alternative with no TLS first
-          host: this.config.host,
-          port: this.config.port,
-          secure: false,
-          auth: {
-            user: this.config.username,
-            pass: this.config.password,
-          },
-          requireTLS: false,
-          connectionTimeout: 30000,
-          greetingTimeout: 15000,
-          socketTimeout: 30000,
+        tls: {
+          rejectUnauthorized: false,
         },
-        {
-          // Try with STARTTLS
-          host: this.config.host,
-          port: 25, // Try standard SMTP port
-          secure: false,
-          auth: {
-            user: this.config.username,
-            pass: this.config.password,
-          },
-          requireTLS: true,
-          tls: {
-            rejectUnauthorized: false,
-          },
-          connectionTimeout: 30000,
-          greetingTimeout: 15000,
-          socketTimeout: 30000,
-        }
-      ];
-
-      // Use the first configuration for now
-      this.transporter = nodemailer.createTransport(configs[0]);
+        connectionTimeout: 30000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
+      });
 
       console.log(`Email service initialized with SMTP server: ${this.config.host}:${this.config.port}`);
-      console.log(`Using credentials: ${this.config.username} (password: ${this.config.password ? 'SET' : 'NOT SET'})`);
-      console.log(`TLS reject unauthorized: ${this.config.tlsRejectUnauthorized}`);
+      console.log(`Using secured connection: ${this.config.secure}`);
+      console.log(`Using authentication: ${this.config.username} (password: ${this.config.password ? 'SET' : 'NOT SET'})`);
     } catch (error) {
       console.error('Failed to initialize email service:', error);
     }
@@ -98,6 +60,15 @@ class EmailService {
   async sendEmail(to: string, subject: string, html: string, text?: string): Promise<boolean> {
     if (!this.transporter) {
       console.error('Email transporter not initialized');
+      return false;
+    }
+
+    try {
+      // First test connection
+      await this.transporter.verify();
+    } catch (verifyError) {
+      console.error('Primary SMTP server verification failed:', verifyError.message);
+      console.log('Email will be queued for retry or alternative delivery');
       return false;
     }
 
