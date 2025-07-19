@@ -4,7 +4,10 @@ import App from "./App";
 import "./index.css";
 import { Helmet, HelmetProvider } from 'react-helmet-async';
 
-createRoot(document.getElementById("root")!).render(
+const root = createRoot(document.getElementById("root")!);
+
+// Only use StrictMode in production to avoid dev hot reload issues
+const AppWrapper = () => (
   <HelmetProvider>
     <Helmet>
       <meta charSet="utf-8" />
@@ -14,3 +17,9 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </HelmetProvider>
 );
+
+if (import.meta.env.PROD) {
+  root.render(<React.StrictMode><AppWrapper /></React.StrictMode>);
+} else {
+  root.render(<AppWrapper />);
+}
