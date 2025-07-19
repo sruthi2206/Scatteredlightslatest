@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -41,6 +41,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Dialog,
   DialogContent,
