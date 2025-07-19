@@ -4,6 +4,15 @@
 
 Scattered Lights is a full-stack web application focused on emotional healing, chakra assessment, and spiritual growth through AI-powered coaching and journaling. The platform combines modern web technologies with spiritual wellness concepts to provide personalized healing experiences.
 
+## Recent Changes (January 18, 2025)
+
+✓ Successfully migrated from Replit Agent to standard Replit environment
+✓ Updated database connection from Neon to external PostgreSQL server
+✓ Fixed React hook errors and component imports
+✓ Verified all API keys are working (OpenAI, Stripe)
+✓ Database schema successfully deployed to production PostgreSQL
+✓ Application builds and runs without errors
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
