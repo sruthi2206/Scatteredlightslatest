@@ -1,5 +1,3 @@
-import React from "react";
-
 // Fixed toast hook without React dependencies causing null useState
 let toastId = 0;
 
@@ -26,7 +24,7 @@ function generateId(): string {
   return (++toastId).toString();
 }
 
-function toastFunction({
+export function toast({
   title,
   description,
   variant = 'default'
@@ -70,9 +68,6 @@ function update(toastId: string, props: Partial<Toast>) {
   };
   notifyListeners();
 }
-
-// Export toast function as well
-export const toast = toastFunction;
 
 // Simple hook replacement that works without React hooks
 export function useToast() {
