@@ -45,9 +45,9 @@ This is a monorepo structure with a **client-server separation** using:
 - **File upload handling** with Multer for media management
 
 ### Database Design
-- **PostgreSQL** as the primary database
+- **PostgreSQL** as the primary database (migrated from Neon to custom PostgreSQL server)
 - **Drizzle ORM** for type-safe database operations and migrations
-- **Neon Database** service for serverless PostgreSQL hosting
+- **Custom PostgreSQL server** at 217.76.58.143:5432
 - Comprehensive schema covering users, chakra profiles, journal entries, emotion tracking, coach conversations, healing rituals, and community features
 
 ## Data Flow
