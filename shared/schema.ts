@@ -20,6 +20,8 @@ export const users = pgTable("users", {
   secretDiaryPin: text("secret_diary_pin"),
   premiumExpiryDate: timestamp("premium_expiry_date"),
   googleId: text("google_id").unique(),
+  resetToken: text("reset_token"),
+  resetTokenExpires: timestamp("reset_token_expires"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

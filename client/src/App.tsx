@@ -23,6 +23,7 @@ import HealingRitualsPage from "@/pages/HealingRitualsPage";
 import RitualCoursePage from "@/pages/RitualCoursePage";
 import TooltipDemo from "@/pages/TooltipDemo";
 import AuthPage from "@/pages/auth-page";
+import ResetPasswordPage from "@/pages/reset-password";
 import NotFound from "@/pages/not-found";
 import { AuthProvider } from "@/hooks/use-auth";
 import { LanguageProvider } from "@/hooks/use-language";
@@ -41,6 +42,7 @@ function Router() {
           {/* Public routes */}
           <Route path="/" component={Home} />
           <Route path="/auth" component={AuthPage} />
+          <Route path="/reset-password" component={ResetPasswordPage} />
           <Route path="/tooltip-demo" component={TooltipDemo} />
           <Route path="/chakra-assessment" component={ChakraAssessment} />
           

@@ -178,35 +178,34 @@ export default function AuthPage() {
     try {
       setIsResettingPassword(true);
       
-      // Send email to backend to initiate password reset
-      // The server will generate and set the temporary password
-      const response = await apiRequest("POST", "/api/reset-password", { 
+      // Send forgot password request to backend
+      const response = await apiRequest("POST", "/api/forgot-password", { 
         email: resetEmail
       });
       
       if (response.ok) {
-        // Get the response data including the temp password
         const data = await response.json();
-        setTempPassword(data.tempPassword);
-        
-        // In a real app, this would trigger an email with the temp password
-        // Since we're not using email service, we'll display it on screen
         
         toast({
-          title: "Password reset successful",
-          description: "A temporary password has been generated. You can use it to log in.",
+          title: "Reset email sent",
+          description: data.message || "If an account with that email exists, a password reset link has been sent.",
         });
+        
+        // Close the dialog
+        setShowForgotPassword(false);
+        setResetEmail("");
       } else {
+        const errorData = await response.json();
         toast({
           title: "Reset failed",
-          description: "Email address not found in our system",
+          description: errorData.message || "Failed to send reset email. Please try again.",
           variant: "destructive",
         });
       }
     } catch (error) {
       toast({
         title: "Reset failed",
-        description: "There was an issue resetting your password",
+        description: "There was an issue processing your request. Please try again.",
         variant: "destructive",
       });
     } finally {

@@ -11,6 +11,7 @@ import { User as SelectUser, users } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { triggerWebhook } from "./webhooks";
+import { emailService } from "./services/emailService";
 
 declare global {
   namespace Express {
@@ -186,6 +187,15 @@ export function setupAuth(app: Express) {
           return res.status(500).json({ message: "Login failed after registration", error: err.message });
         }
         
+        // Send welcome email
+        try {
+          await emailService.sendWelcomeEmail(user.email, user.username);
+          console.log(`Welcome email sent to: ${user.email}`);
+        } catch (emailError) {
+          console.error("Failed to send welcome email:", emailError);
+          // Don't fail registration if email fails
+        }
+        
         // Trigger webhook for new user registration
         try {
           await triggerWebhook('user.registered', {
@@ -253,69 +263,115 @@ export function setupAuth(app: Express) {
     res.status(200).json(req.user);
   });
   
-  // Password reset endpoint
-  app.post("/api/reset-password", async (req, res) => {
-    console.log("Password reset request received", req.body);
+  // Forgot password endpoint - sends reset email
+  app.post("/api/forgot-password", async (req, res) => {
     try {
-      const { email, tempPassword } = req.body;
+      const { email } = req.body;
       
       if (!email) {
-        console.log("Email missing in reset request");
         return res.status(400).json({ message: "Email is required" });
       }
       
       // Find user by email
-      console.log("Finding user by email:", email);
       const user = await storage.getUserByEmail(email);
       
       if (!user) {
-        console.log("User not found with email:", email);
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      console.log("User found:", user.id, user.username);
-      
-      // Generate a simple temporary password that doesn't include special characters
-      // to avoid compatibility issues
-      let finalTempPassword = tempPassword;
-      if (!finalTempPassword) {
-        console.log("No temp password provided, generating one");
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        finalTempPassword = '';
-        for (let i = 0; i < 8; i++) {
-          finalTempPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-      }
-      
-      console.log("Using temporary password:", finalTempPassword);
-      
-      try {
-        // Hash the temporary password
-        const hashedPassword = await hashPassword(finalTempPassword);
-        console.log("Hashed password generated");
-        
-        // Update the user's password in the database
-        console.log("Updating user password in database for user ID:", user.id);
-        
-        // Update password directly in the database
-        await db.update(users)
-          .set({ password: hashedPassword })
-          .where(eq(users.id, user.id));
-          
-        console.log("Password reset successful");
-        
+        // Don't reveal if user exists or not for security
         return res.status(200).json({ 
           success: true, 
-          message: "Password reset successful",
-          tempPassword: finalTempPassword
+          message: "If an account with that email exists, a password reset link has been sent." 
         });
-      } catch (updateError) {
-        console.error("Error updating password:", updateError);
-        return res.status(500).json({ message: "Failed to update password in database" });
       }
+      
+      // Generate reset token (expires in 1 hour)
+      const resetToken = nanoid(32);
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+      
+      // Store reset token in database (you'll need to add this field to users table)
+      await db.update(users)
+        .set({ 
+          resetToken,
+          resetTokenExpires: expiresAt
+        })
+        .where(eq(users.id, user.id));
+      
+      // Send password reset email
+      const emailSent = await emailService.sendPasswordResetEmail(
+        user.email, 
+        resetToken, 
+        user.username
+      );
+      
+      if (!emailSent) {
+        console.error("Failed to send password reset email to:", email);
+        return res.status(500).json({ 
+          message: "Failed to send password reset email. Please try again later." 
+        });
+      }
+      
+      console.log(`Password reset email sent to: ${email}`);
+      
+      return res.status(200).json({ 
+        success: true, 
+        message: "If an account with that email exists, a password reset link has been sent." 
+      });
     } catch (error) {
-      console.error("Password reset error:", error);
-      return res.status(500).json({ message: "Error processing password reset" });
+      console.error("Forgot password error:", error);
+      return res.status(500).json({ message: "Error processing forgot password request" });
+    }
+  });
+
+  // Reset password with token endpoint
+  app.post("/api/reset-password", async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      
+      if (!token || !newPassword) {
+        return res.status(400).json({ message: "Token and new password are required" });
+      }
+      
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters long" });
+      }
+      
+      // Find user by reset token
+      const user = await db.select()
+        .from(users)
+        .where(eq(users.resetToken, token))
+        .limit(1);
+      
+      if (!user.length) {
+        return res.status(400).json({ message: "Invalid or expired reset token" });
+      }
+      
+      const foundUser = user[0];
+      
+      // Check if token is expired
+      if (!foundUser.resetTokenExpires || foundUser.resetTokenExpires < new Date()) {
+        return res.status(400).json({ message: "Reset token has expired" });
+      }
+      
+      // Hash the new password
+      const hashedPassword = await hashPassword(newPassword);
+      
+      // Update user password and clear reset token
+      await db.update(users)
+        .set({ 
+          password: hashedPassword,
+          resetToken: null,
+          resetTokenExpires: null
+        })
+        .where(eq(users.id, foundUser.id));
+      
+      console.log(`Password reset successful for user: ${foundUser.email}`);
+      
+      return res.status(200).json({ 
+        success: true, 
+        message: "Password reset successful. You can now log in with your new password." 
+      });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      return res.status(500).json({ message: "Error resetting password" });
     }
   });
   

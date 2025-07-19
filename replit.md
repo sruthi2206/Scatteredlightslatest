@@ -13,6 +13,10 @@ Scattered Lights is a full-stack web application focused on emotional healing, c
 ✓ Database schema successfully deployed to production PostgreSQL
 ✓ Application builds and runs without errors
 ✓ Production preview URL works perfectly: https://b4e1e631-e520-48e3-9731-81078ea79eaf.kirk.prod.repl.run/
+✓ Migrated from SendGrid to SMTP-based email service using Nodemailer
+✓ Implemented secure password reset flow with email tokens
+✓ Added welcome emails for new user registrations
+✓ Email service configured with user's SMTP server (email.storyweb.in:587)
 
 **Note**: Development mode shows React context errors due to Vite hot-reload conflicts, but production build works flawlessly. Use production preview for testing.
 
