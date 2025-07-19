@@ -32,20 +32,64 @@ class EmailService {
 
   private initializeTransporter() {
     try {
-      this.transporter = nodemailer.createTransport({
-        host: this.config.host,
-        port: this.config.port,
-        secure: this.config.secure,
-        auth: {
-          user: this.config.username,
-          pass: this.config.password,
+      // Try different SMTP configurations
+      const configs = [
+        {
+          // Standard configuration
+          host: this.config.host,
+          port: this.config.port,
+          secure: this.config.secure,
+          auth: {
+            user: this.config.username,
+            pass: this.config.password,
+          },
+          tls: {
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3',
+          },
+          connectionTimeout: 30000,
+          greetingTimeout: 15000,
+          socketTimeout: 30000,
         },
-        tls: {
-          rejectUnauthorized: this.config.tlsRejectUnauthorized,
+        {
+          // Alternative with no TLS first
+          host: this.config.host,
+          port: this.config.port,
+          secure: false,
+          auth: {
+            user: this.config.username,
+            pass: this.config.password,
+          },
+          requireTLS: false,
+          connectionTimeout: 30000,
+          greetingTimeout: 15000,
+          socketTimeout: 30000,
         },
-      });
+        {
+          // Try with STARTTLS
+          host: this.config.host,
+          port: 25, // Try standard SMTP port
+          secure: false,
+          auth: {
+            user: this.config.username,
+            pass: this.config.password,
+          },
+          requireTLS: true,
+          tls: {
+            rejectUnauthorized: false,
+          },
+          connectionTimeout: 30000,
+          greetingTimeout: 15000,
+          socketTimeout: 30000,
+        }
+      ];
+
+      // Use the first configuration for now
+      this.transporter = nodemailer.createTransport(configs[0]);
 
       console.log(`Email service initialized with SMTP server: ${this.config.host}:${this.config.port}`);
+      console.log(`Using credentials: ${this.config.username} (password: ${this.config.password ? 'SET' : 'NOT SET'})`);
+      console.log(`TLS reject unauthorized: ${this.config.tlsRejectUnauthorized}`);
     } catch (error) {
       console.error('Failed to initialize email service:', error);
     }
