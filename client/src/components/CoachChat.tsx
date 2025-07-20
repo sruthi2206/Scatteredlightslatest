@@ -142,17 +142,7 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
             recognitionRef.current.onstart = () => {
               console.log('Speech recognition started');
               setIsListening(true);
-              
-              // Auto-stop after 30 seconds
-              timeoutRef.current = setTimeout(() => {
-                if (recognitionRef.current && isListening) {
-                  try {
-                    recognitionRef.current.stop();
-                  } catch (error) {
-                    console.error('Error auto-stopping recognition:', error);
-                  }
-                }
-              }, 30000);
+              // No auto-timeout - user controls when to stop
             };
             
             recognitionRef.current.onresult = (event: any) => {
@@ -199,12 +189,6 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
               setIsListening(false);
               setIsVoiceActive(false);
               setInterimTranscript(''); // Clear interim transcript
-              
-              // Clear timeout
-              if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-                timeoutRef.current = null;
-              }
             };
             
             recognitionRef.current.onerror = (event: any) => {
@@ -212,12 +196,6 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
               setIsListening(false);
               setIsVoiceActive(false);
               setInterimTranscript(''); // Clear interim transcript
-              
-              // Clear timeout on error
-              if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-                timeoutRef.current = null;
-              }
               
               // Show specific error messages
               let errorMessage = "Please try again.";
@@ -461,11 +439,6 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
         setIsVoiceActive(false);
         setIsListening(false);
         setInterimTranscript('');
-        
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
       } catch (error) {
         console.error('Error stopping recognition:', error);
         setIsVoiceActive(false);
@@ -500,8 +473,8 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
               
               // Show different messages for mobile vs desktop
               const successMessage = isMobile || isTablet
-                ? "Tap the microphone button again to stop recording. Speak clearly into your device's microphone."
-                : "Click the microphone button again to stop recording.";
+                ? "Tap the microphone button again when you're done speaking."
+                : "Click the microphone button again when you're done speaking.";
               
               toast({
                 title: "Voice Input Started", 

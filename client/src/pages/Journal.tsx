@@ -114,13 +114,7 @@ export default function Journal() {
             recognitionRef.current.onstart = () => {
               console.log('Speech recognition started');
               setIsListening(true);
-              
-              // Auto-stop after 10 seconds for better accuracy
-              timeoutRef.current = setTimeout(() => {
-                if (recognitionRef.current && isListening) {
-                  recognitionRef.current.stop();
-                }
-              }, 10000);
+              // No auto-timeout - user controls when to stop
             };
             
             recognitionRef.current.onresult = (event: any) => {
@@ -194,12 +188,6 @@ export default function Journal() {
               setIsListening(false);
               setIsVoiceActive(false);
               setActiveVoiceField("");
-              
-              // Clear timeout
-              if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-                timeoutRef.current = null;
-              }
             };
             
             recognitionRef.current.onerror = (event: any) => {
@@ -376,12 +364,6 @@ export default function Journal() {
         setIsListening(false);
         setActiveVoiceField("");
         
-        // Clear timeout
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-        
         toast({
           title: "Voice Input Stopped",
           description: "Your message has been captured.",
@@ -404,7 +386,7 @@ export default function Journal() {
             
             toast({
               title: "Voice Input Started", 
-              description: `Speak clearly to record your ${fieldType === 'general' ? 'journal entry' : fieldType}.`,
+              description: `Speak freely. Click the button again when you're done recording.`,
             });
           })
           .catch((error) => {
@@ -777,7 +759,7 @@ export default function Journal() {
                     ) : (
                       <>
                         <Mic className="h-4 w-4 mr-1" />
-                        <span>{t('voiceJournal') || "Voice Journal"}</span>
+                        <span>{t('voiceJournal') || "Start Voice"}</span>
                       </>
                     )}
                   </Button>
