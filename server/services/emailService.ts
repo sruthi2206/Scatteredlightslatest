@@ -91,8 +91,10 @@ class EmailService {
   }
 
   async sendPasswordResetEmail(to: string, resetToken: string, username: string): Promise<boolean> {
-    const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5000'}/reset-password?token=${resetToken}`;
-    
+    // Use CLIENT_URL for the domain, fallback to localhost:5000 for development
+    const baseUrl = process.env.CLIENT_URL || process.env.REPL_URL || 'http://localhost:5000';
+    const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -117,17 +119,17 @@ class EmailService {
         <div class="content">
           <h2>Hello ${username},</h2>
           <p>We received a request to reset your password for your Scattered Lights account. If you didn't make this request, you can safely ignore this email.</p>
-          
+
           <p>To reset your password, click the button below:</p>
           <a href="${resetUrl}" class="button">Reset Password</a>
-          
+
           <p>Or copy and paste this link into your browser:</p>
           <div class="token">${resetUrl}</div>
-          
+
           <p><strong>This link will expire in 1 hour</strong> for your security.</p>
-          
+
           <p>If you're having trouble clicking the button, copy and paste the URL above into your web browser.</p>
-          
+
           <p>Best regards,<br>The Scattered Lights Team</p>
         </div>
         <div class="footer">
@@ -140,15 +142,15 @@ class EmailService {
 
     const text = `
       Hello ${username},
-      
+
       We received a request to reset your password for your Scattered Lights account.
-      
+
       To reset your password, visit this link: ${resetUrl}
-      
+
       This link will expire in 1 hour for your security.
-      
+
       If you didn't request this password reset, you can safely ignore this email.
-      
+
       Best regards,
       The Scattered Lights Team
     `;
@@ -157,8 +159,10 @@ class EmailService {
   }
 
   async sendWelcomeEmail(to: string, username: string): Promise<boolean> {
-    const loginUrl = `${process.env.CLIENT_URL || 'http://localhost:5000'}/auth`;
-    
+    / Use CLIENT_URL for the domain, fallback to localhost:5000 for development  
+    const baseUrl = process.env.CLIENT_URL || process.env.REPL_URL || 'http://localhost:5000';
+    const loginUrl = `${baseUrl}/auth`;
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -183,34 +187,34 @@ class EmailService {
         <div class="content">
           <h2>Hello ${username},</h2>
           <p>Welcome to Scattered Lights! We're excited to have you join our community of individuals on a journey toward emotional balance and spiritual growth.</p>
-          
+
           <h3>What you can do with Scattered Lights:</h3>
-          
+
           <div class="feature">
             <strong>🧘 Chakra Assessment</strong><br>
             Discover your energy centers and understand your spiritual alignment
           </div>
-          
+
           <div class="feature">
             <strong>📝 AI-Powered Journaling</strong><br>
             Reflect on your thoughts and emotions with intelligent insights
           </div>
-          
+
           <div class="feature">
             <strong>🤖 Personal AI Coaches</strong><br>
             Get guidance from specialized AI coaches for different aspects of healing
           </div>
-          
+
           <div class="feature">
             <strong>📊 Progress Tracking</strong><br>
             Monitor your emotional journey and celebrate your growth
           </div>
-          
+
           <p>Ready to start your healing journey?</p>
           <a href="${loginUrl}" class="button">Begin Your Journey</a>
-          
+
           <p>We recommend starting with the Chakra Assessment to understand your current energy state and receive personalized recommendations.</p>
-          
+
           <p>Best regards,<br>The Scattered Lights Team</p>
         </div>
         <div class="footer">
@@ -222,19 +226,19 @@ class EmailService {
 
     const text = `
       Welcome to Scattered Lights, ${username}!
-      
+
       Your journey to inner healing begins now. 
-      
+
       With Scattered Lights, you can:
       - Take chakra assessments to understand your energy centers
       - Use AI-powered journaling for emotional reflection
       - Chat with personal AI coaches for guidance
       - Track your progress on your healing journey
-      
+
       Start your journey: ${loginUrl}
-      
+
       We recommend beginning with the Chakra Assessment to understand your current energy state.
-      
+
       Best regards,
       The Scattered Lights Team
     `;
