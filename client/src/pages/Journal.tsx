@@ -93,16 +93,17 @@ export default function Journal() {
   };
   const [shortTermGoals, setShortTermGoals] = useState<string[]>(["", "", ""]);
   const [longTermVision, setLongTermVision] = useState("");
-  // Voice recognition states - simplified for temp input window
+  // Voice recognition states - floating widget system
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [voiceInputDialog, setVoiceInputDialog] = useState(false);
+  const [voiceFloatingWidget, setVoiceFloatingWidget] = useState(false);
   const [voiceMessage, setVoiceMessage] = useState('');
-  const [targetField, setTargetField] = useState('');
-  const [targetFieldIndex, setTargetFieldIndex] = useState<number | null>(null);
+  const [isReadyToInsert, setIsReadyToInsert] = useState(false);
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const activeTextAreaRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -330,9 +331,9 @@ export default function Journal() {
     createJournalMutation.mutate();
   };
   
-  // Open voice input dialog (simplified like coach chat)
-  const openVoiceInput = (fieldType: string, fieldIndex: number | null = null) => {
-    console.log('Opening voice input dialog for:', fieldType, fieldIndex);
+  // Open voice input dialog (single entry point)
+  const openVoiceInput = () => {
+    console.log('Opening main voice input dialog');
     
     // Check browser support
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -346,11 +347,12 @@ export default function Journal() {
       return;
     }
 
-    // Set target field info and open dialog
-    setTargetField(fieldType);
-    setTargetFieldIndex(fieldIndex);
+    // Reset state and open dialog
     setVoiceMessage('');
+    setInterimTranscript('');
+    setIsReadyToInsert(false);
     setVoiceInputDialog(true);
+    setVoiceFloatingWidget(false);
   };
 
   // Toggle voice recording in dialog
@@ -393,8 +395,8 @@ export default function Journal() {
     }
   };
 
-  // Insert voice message into target field
-  const insertVoiceMessage = () => {
+  // Minimize to floating widget after recording
+  const minimizeToFloatingWidget = () => {
     if (!voiceMessage.trim()) {
       toast({
         title: "No Voice Input",
@@ -404,32 +406,11 @@ export default function Journal() {
       return;
     }
 
-    const textToInsert = voiceMessage.trim();
-
-    // Insert into appropriate field
-    if (targetField === 'general') {
-      setJournalContent(prev => prev ? `${prev} ${textToInsert}` : textToInsert);
-    } else if (targetField === 'affirmation') {
-      setAffirmation(prev => prev ? `${prev} ${textToInsert}` : textToInsert);
-    } else if (targetField === 'longTermVision') {
-      setLongTermVision(prev => prev ? `${prev} ${textToInsert}` : textToInsert);
-    } else if (targetField === 'gratitude' && targetFieldIndex !== null) {
-      const newGratitude = [...gratitude];
-      const currentText = newGratitude[targetFieldIndex];
-      newGratitude[targetFieldIndex] = currentText ? `${currentText} ${textToInsert}` : textToInsert;
-      setGratitude(newGratitude);
-    } else if (targetField === 'goal' && targetFieldIndex !== null) {
-      const newGoals = [...shortTermGoals];
-      const currentText = newGoals[targetFieldIndex];
-      newGoals[targetFieldIndex] = currentText ? `${currentText} ${textToInsert}` : textToInsert;
-      setShortTermGoals(newGoals);
-    }
-
-    // Close dialog and reset
     setVoiceInputDialog(false);
-    setVoiceMessage('');
-    setTargetField('');
-    setTargetFieldIndex(null);
+    setVoiceFloatingWidget(true);
+    setIsReadyToInsert(true);
+    
+    // Stop recording if active
     if (isVoiceActive && recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -441,9 +422,78 @@ export default function Journal() {
     }
 
     toast({
-      title: "Voice Input Added",
-      description: "Your voice input has been added to the field.",
+      title: "Ready to Insert",
+      description: "Click on any text field to insert your recorded voice input.",
     });
+  };
+
+  // Insert voice content at cursor position
+  const insertAtCursor = (element: HTMLTextAreaElement | HTMLInputElement) => {
+    if (!voiceMessage.trim() || !isReadyToInsert) return;
+
+    const textToInsert = voiceMessage.trim();
+    const startPos = element.selectionStart || 0;
+    const endPos = element.selectionEnd || 0;
+    const currentValue = element.value;
+    
+    // Insert text at cursor position
+    const newValue = currentValue.substring(0, startPos) + textToInsert + currentValue.substring(endPos);
+    
+    // Update the appropriate state based on element
+    const fieldName = element.getAttribute('data-field');
+    const fieldIndex = element.getAttribute('data-index');
+    
+    if (fieldName === 'journalContent') {
+      setJournalContent(newValue);
+    } else if (fieldName === 'affirmation') {
+      setAffirmation(newValue);
+    } else if (fieldName === 'longTermVision') {
+      setLongTermVision(newValue);
+    } else if (fieldName === 'gratitude' && fieldIndex !== null) {
+      const newGratitude = [...gratitude];
+      newGratitude[parseInt(fieldIndex)] = newValue;
+      setGratitude(newGratitude);
+    } else if (fieldName === 'goal' && fieldIndex !== null) {
+      const newGoals = [...shortTermGoals];
+      newGoals[parseInt(fieldIndex)] = newValue;
+      setShortTermGoals(newGoals);
+    }
+
+    // Reset floating widget
+    setVoiceFloatingWidget(false);
+    setVoiceMessage('');
+    setIsReadyToInsert(false);
+
+    // Set cursor position after inserted text
+    setTimeout(() => {
+      const newCursorPos = startPos + textToInsert.length;
+      element.setSelectionRange(newCursorPos, newCursorPos);
+      element.focus();
+    }, 10);
+
+    toast({
+      title: "Voice Input Inserted",
+      description: "Your voice input has been added at the selected position.",
+    });
+  };
+
+  // Reset voice input
+  const resetVoiceInput = () => {
+    setVoiceMessage('');
+    setInterimTranscript('');
+    setIsReadyToInsert(false);
+    setVoiceFloatingWidget(false);
+    setVoiceInputDialog(false);
+    
+    if (isVoiceActive && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.error('Error stopping recognition:', error);
+      }
+      setIsVoiceActive(false);
+      setIsListening(false);
+    }
   };
   
   // Format date for display
@@ -553,21 +603,11 @@ export default function Journal() {
                     
                     <TabsContent value="general">
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-medium text-neutral-800">{t('generalTitle') || "💭 General Reflections"}</h3>
-                            <p className="text-sm text-neutral-600">
-                              {t('generalDescription') || "Write freely about your thoughts, emotions, and experiences"}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => openVoiceInput('general')}
-                          >
-                            <Mic className="h-4 w-4" />
-                          </Button>
+                        <div>
+                          <h3 className="text-lg font-medium text-neutral-800">{t('generalTitle') || "💭 General Reflections"}</h3>
+                          <p className="text-sm text-neutral-600">
+                            {t('generalDescription') || "Write freely about your thoughts, emotions, and experiences"}
+                          </p>
                         </div>
                         <div className="relative">
                           <Textarea
@@ -575,6 +615,12 @@ export default function Journal() {
                             className="min-h-[200px] resize-none"
                             value={journalContent}
                             onChange={(e) => setJournalContent(e.target.value)}
+                            onClick={(e) => {
+                              if (isReadyToInsert) {
+                                insertAtCursor(e.target as HTMLTextAreaElement);
+                              }
+                            }}
+                            data-field="journalContent"
                           />
                         </div>
                       </div>
@@ -594,16 +640,15 @@ export default function Journal() {
                                 placeholder={`${t('gratitudePlaceholder') || "Gratitude"} ${index + 1}`}
                                 value={item}
                                 onChange={(e) => updateGratitude(index, e.target.value)}
+                                onClick={(e) => {
+                                  if (isReadyToInsert) {
+                                    insertAtCursor(e.target as HTMLInputElement);
+                                  }
+                                }}
                                 className="flex-grow"
+                                data-field="gratitude"
+                                data-index={index}
                               />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={() => openVoiceInput('gratitude', index)}
-                              >
-                                <Mic className="h-3 w-3" />
-                              </Button>
                               {gratitude.length > 1 && (
                                 <Button 
                                   type="button" 
@@ -721,26 +766,24 @@ export default function Journal() {
 
                         {/* Original simple affirmation field */}
                         <div className="space-y-4 bg-gradient-to-r from-rose-50 to-pink-50 p-4 rounded-lg border border-rose-100">
-                          <div className="flex items-center justify-between">
+                          <div>
                             <h4 className="text-md font-semibold text-rose-800 flex items-center">
                               <Rocket className="w-4 h-4 mr-2" />
                               Personal Affirmation
                             </h4>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openVoiceInput('affirmation')}
-                            >
-                              <Mic className="h-3 w-3" />
-                            </Button>
                           </div>
                           <div className="relative">
                             <Input
                               placeholder="I am..."
                               value={affirmation}
                               onChange={(e) => setAffirmation(e.target.value)}
+                              onClick={(e) => {
+                                if (isReadyToInsert) {
+                                  insertAtCursor(e.target as HTMLInputElement);
+                                }
+                              }}
                               className="bg-white"
+                              data-field="affirmation"
                             />
                           </div>
                         </div>
@@ -762,16 +805,15 @@ export default function Journal() {
                                 placeholder={`${t('shortTermPlaceholder') || "Step"} ${index + 1}`}
                                 value={goal}
                                 onChange={(e) => updateShortTermGoal(index, e.target.value)}
+                                onClick={(e) => {
+                                  if (isReadyToInsert) {
+                                    insertAtCursor(e.target as HTMLInputElement);
+                                  }
+                                }}
                                 className="flex-grow"
+                                data-field="goal"
+                                data-index={index}
                               />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                onClick={() => openVoiceInput('goal', index)}
-                              >
-                                <Mic className="h-3 w-3" />
-                              </Button>
                               {shortTermGoals.length > 1 && (
                                 <Button 
                                   type="button" 
@@ -801,21 +843,11 @@ export default function Journal() {
                     
                     <TabsContent value="longterm">
                       <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="text-lg font-medium text-neutral-800">{t('longTermTitle') || "🚀 Steps toward my long-term goals"}</h3>
-                            <p className="text-sm text-neutral-600">
-                              {t('longTermDescription') || "What aligned actions or habits will move you toward your vision?"}
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => openVoiceInput('longTermVision')}
-                          >
-                            <Mic className="h-4 w-4" />
-                          </Button>
+                        <div>
+                          <h3 className="text-lg font-medium text-neutral-800">{t('longTermTitle') || "🚀 Steps toward my long-term goals"}</h3>
+                          <p className="text-sm text-neutral-600">
+                            {t('longTermDescription') || "What aligned actions or habits will move you toward your vision?"}
+                          </p>
                         </div>
                         <div className="relative">
                           <Textarea
@@ -823,6 +855,12 @@ export default function Journal() {
                             className="min-h-[150px] resize-none"
                             value={longTermVision}
                             onChange={(e) => setLongTermVision(e.target.value)}
+                            onClick={(e) => {
+                              if (isReadyToInsert) {
+                                insertAtCursor(e.target as HTMLTextAreaElement);
+                              }
+                            }}
+                            data-field="longTermVision"
                           />
                         </div>
                       </div>
@@ -837,7 +875,7 @@ export default function Journal() {
                     onClick={(e) => {
                       e.preventDefault();
                       console.log('Voice Journal button clicked!');
-                      openVoiceInput('general');
+                      openVoiceInput();
                     }}
                     title="Start voice input"
                   >
@@ -1090,7 +1128,7 @@ export default function Journal() {
             <DialogHeader>
               <DialogTitle>Voice Input</DialogTitle>
               <DialogDescription>
-                Record your voice input and click "Insert" to add it to your journal field.
+                Record your voice input and click "Ready to Insert" to minimize to floating widget.
               </DialogDescription>
             </DialogHeader>
             
@@ -1149,13 +1187,39 @@ export default function Journal() {
               >
                 Cancel
               </Button>
-              <Button onClick={insertVoiceMessage}>
+              <Button onClick={minimizeToFloatingWidget}>
                 <Send className="h-4 w-4 mr-2" />
-                Insert
+                Ready to Insert
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Floating Voice Widget */}
+        {voiceFloatingWidget && (
+          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 bg-white border border-gray-200 rounded-full shadow-lg px-3 py-2 flex items-center gap-2 sm:gap-3 transition-all duration-300 ease-in-out max-w-[90vw] sm:max-w-md">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <Mic className="h-4 w-4 text-blue-600 flex-shrink-0" />
+              <span className="text-sm font-medium text-gray-700 truncate">
+                {voiceMessage.length > 25 ? `${voiceMessage.substring(0, 25)}...` : voiceMessage}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={resetVoiceInput}
+                className="h-7 w-7 p-0 hover:bg-gray-100 rounded-full"
+                title="Reset voice input"
+              >
+                <XCircle className="h-3 w-3 text-gray-500" />
+              </Button>
+              <div className="hidden sm:block text-xs text-gray-500 px-2 whitespace-nowrap">
+                Click any text field
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
