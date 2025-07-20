@@ -26,7 +26,8 @@ import {
   MessageSquareText,
   XCircle,
   PlusCircle,
-  Lock
+  Lock,
+  Send
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -36,6 +37,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import SecretDiaryPinModal from "@/components/SecretDiaryPinModal";
 import SecretDiaryCalendar from "@/components/SecretDiaryCalendar";
 
@@ -84,22 +93,24 @@ export default function Journal() {
   };
   const [shortTermGoals, setShortTermGoals] = useState<string[]>(["", "", ""]);
   const [longTermVision, setLongTermVision] = useState("");
+  // Voice recognition states - simplified for temp input window
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [activeVoiceField, setActiveVoiceField] = useState<string>("");
-  const [interimTranscript, setInterimTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [voiceInputDialog, setVoiceInputDialog] = useState(false);
+  const [voiceMessage, setVoiceMessage] = useState('');
+  const [targetField, setTargetField] = useState('');
+  const [targetFieldIndex, setTargetFieldIndex] = useState<number | null>(null);
   const recognitionRef = useRef<any>(null);
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Initialize speech recognition
+  // Initialize speech recognition for voice input dialog (simplified like coach)
   useEffect(() => {
-    console.log('Initializing speech recognition in Journal...');
+    console.log('Initializing speech recognition for voice dialog...');
     if (typeof window !== 'undefined') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      
-      console.log('Speech Recognition constructor available:', !!SpeechRecognition);
       
       if (SpeechRecognition) {
         try {
@@ -113,13 +124,11 @@ export default function Journal() {
             recognitionRef.current.maxAlternatives = 1;
             
             recognitionRef.current.onstart = () => {
-              console.log('Speech recognition started');
+              console.log('Voice dialog speech recognition started');
               setIsListening(true);
-              // No auto-timeout - user controls when to stop
             };
             
             recognitionRef.current.onresult = (event: any) => {
-              console.log('Speech recognition result:', event);
               let interimText = '';
               let finalText = '';
               
@@ -128,146 +137,80 @@ export default function Journal() {
                 const transcript = result[0].transcript;
                 
                 if (result.isFinal) {
-                  // Clean up the final transcript
                   const cleanedTranscript = transcript
                     .trim()
                     .replace(/\s+/g, ' ')
-                    .replace(/\b(kill|steel|deal)\b/gi, (match: string) => {
-                      const text = transcript.toLowerCase();
-                      const corrections: { [key: string]: string } = {
-                        'kill': text.includes('speech') || text.includes('text') ? 'create' : match,
-                        'steel': 'still',
-                        'deal': 'real'
-                      };
-                      return corrections[match.toLowerCase()] || match;
-                    })
                     .replace(/^./, (match: string) => match.toUpperCase())
                     .trim();
                   
-                  finalText += cleanedTranscript + ' ';
-                  console.log('Final transcript:', cleanedTranscript);
-                  
-                  // Clear interim transcript when we get final result
+                  finalText += cleanedTranscript;
                   setInterimTranscript('');
                 } else {
-                  // Show interim results for real-time feedback
                   interimText += transcript;
                   setInterimTranscript(interimText);
                 }
               }
               
-              // Update the appropriate field with final text
+              // Update voice message with final text
               if (finalText.trim()) {
-                console.log('JOURNAL Adding final text to field:', activeVoiceField, 'Text:', finalText.trim());
-                if (activeVoiceField === 'general') {
-                  setJournalContent(prev => {
-                    const currentText = prev.trim();
-                    const newText = finalText.trim();
-                    const result = currentText ? `${currentText} ${newText}` : newText;
-                    console.log('JOURNAL Updated journal content:', result);
-                    return result;
-                  });
-                } else if (activeVoiceField === 'affirmation') {
-                  setAffirmation(prev => {
-                    const currentText = prev.trim();
-                    const newText = finalText.trim();
-                    return currentText ? `${currentText} ${newText}` : newText;
-                  });
-                } else if (activeVoiceField === 'longTermVision') {
-                  setLongTermVision(prev => {
-                    const currentText = prev.trim();
-                    const newText = finalText.trim();
-                    return currentText ? `${currentText} ${newText}` : newText;
-                  });
-                } else if (activeVoiceField.startsWith('gratitude-')) {
-                  const index = parseInt(activeVoiceField.split('-')[1]);
-                  const newGratitude = [...gratitude];
-                  const currentText = newGratitude[index].trim();
+                setVoiceMessage(prev => {
+                  const currentText = prev.trim();
                   const newText = finalText.trim();
-                  newGratitude[index] = currentText ? `${currentText} ${newText}` : newText;
-                  setGratitude(newGratitude);
-                } else if (activeVoiceField.startsWith('goal-')) {
-                  const index = parseInt(activeVoiceField.split('-')[1]);
-                  const newGoals = [...shortTermGoals];
-                  const currentText = newGoals[index].trim();
-                  const newText = finalText.trim();
-                  newGoals[index] = currentText ? `${currentText} ${newText}` : newText;
-                  setShortTermGoals(newGoals);
-                }
+                  return currentText ? `${currentText} ${newText}` : newText;
+                });
               }
             };
             
             recognitionRef.current.onend = () => {
-              console.log('JOURNAL Speech recognition ended, isVoiceActive:', isVoiceActive, 'activeVoiceField:', activeVoiceField);
+              console.log('Voice dialog speech recognition ended');
               setIsListening(false);
+              setInterimTranscript('');
               
-              // Only restart if voice is still meant to be active
-              // Don't clear interim transcript here to avoid losing content
-              if (isVoiceActive && activeVoiceField && recognitionRef.current) {
-                console.log('JOURNAL Auto-restarting speech recognition...');
+              // Auto-restart if voice is still active
+              if (isVoiceActive) {
                 restartTimeoutRef.current = setTimeout(() => {
-                  try {
-                    if (isVoiceActive && activeVoiceField && recognitionRef.current) {
+                  if (isVoiceActive && recognitionRef.current) {
+                    try {
                       recognitionRef.current.start();
+                    } catch (error) {
+                      console.error('Error restarting recognition:', error);
                     }
-                  } catch (error) {
-                    console.error('JOURNAL Error restarting recognition:', error);
                   }
-                }, 300); // Longer delay to prevent rapid restarts
-              } else {
-                // Only clear interim transcript when actually stopping
-                setInterimTranscript('');
-                setIsVoiceActive(false);
-                setActiveVoiceField("");
+                }, 100);
               }
             };
             
             recognitionRef.current.onerror = (event: any) => {
-              console.error('JOURNAL Speech recognition error:', event.error);
+              console.error('Voice dialog speech recognition error:', event.error);
               setIsListening(false);
+              setInterimTranscript('');
               
-              // Handle different error types appropriately
-              if (event.error === 'no-speech') {
-                // Don't stop for no-speech errors, just continue
-                console.log('JOURNAL No speech detected, continuing...');
-                return;
-              } else if (event.error === 'audio-capture') {
-                // Audio capture issues, try to continue
-                console.log('JOURNAL Audio capture issue, continuing...');
-                return;
-              } else if (event.error === 'not-allowed') {
-                // Permission denied - stop voice input
+              // Only show error for serious issues
+              if (event.error !== 'no-speech' && event.error !== 'audio-capture') {
                 setIsVoiceActive(false);
-                setActiveVoiceField("");
-                setInterimTranscript('');
                 
-                toast({
-                  title: "Microphone Access Denied",
-                  description: "Please allow microphone access to use voice input.",
-                  variant: "destructive",
-                });
-              } else {
-                // Other serious errors - stop voice input
-                setIsVoiceActive(false);
-                setActiveVoiceField("");
-                setInterimTranscript('');
+                let errorMessage = "Please try again.";
+                switch (event.error) {
+                  case 'not-allowed':
+                    errorMessage = "Microphone access denied. Please allow microphone access.";
+                    break;
+                  case 'network':
+                    errorMessage = "Network error. Please check your connection.";
+                    break;
+                }
                 
                 toast({
                   title: "Voice Recognition Error",
-                  description: `Error: ${event.error}. Please try again.`,
+                  description: errorMessage,
                   variant: "destructive",
                 });
               }
             };
           }
         } catch (error) {
-          console.error('Failed to initialize speech recognition:', error);
+          console.error('Error initializing speech recognition:', error);
         }
-      } else {
-        console.log('Speech recognition not supported in this browser');
       }
-    } else {
-      console.log('Window object not available');
     }
     
     return () => {
@@ -387,15 +330,9 @@ export default function Journal() {
     createJournalMutation.mutate();
   };
   
-  // Toggle voice journaling
-  const toggleVoiceJournaling = (fieldType: string = 'general') => {
-    console.log('JOURNAL Voice recording button clicked', { fieldType, isVoiceActive, isListening, activeVoiceField });
-    
-    // Clear any existing restart timeout
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
+  // Open voice input dialog (simplified like coach chat)
+  const openVoiceInput = (fieldType: string, fieldIndex: number | null = null) => {
+    console.log('Opening voice input dialog for:', fieldType, fieldIndex);
     
     // Check browser support
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -409,8 +346,16 @@ export default function Journal() {
       return;
     }
 
+    // Set target field info and open dialog
+    setTargetField(fieldType);
+    setTargetFieldIndex(fieldIndex);
+    setVoiceMessage('');
+    setVoiceInputDialog(true);
+  };
+
+  // Toggle voice recording in dialog
+  const toggleVoiceRecording = () => {
     if (!recognitionRef.current) {
-      console.log('Recognition ref is null, attempting to initialize...');
       toast({
         title: "Voice Recognition Error",
         description: "Voice recognition is not initialized. Please refresh the page.",
@@ -419,60 +364,86 @@ export default function Journal() {
       return;
     }
 
-    if (isVoiceActive && activeVoiceField) {
+    if (isVoiceActive) {
       // Stop recording
-      console.log('JOURNAL Stopping voice input...');
       try {
         recognitionRef.current.stop();
         setIsVoiceActive(false);
         setIsListening(false);
-        setActiveVoiceField("");
-        setInterimTranscript("");
-        
-        toast({
-          title: "Voice Input Stopped",
-          description: "Your message has been captured.",
-        });
       } catch (error) {
         console.error('Error stopping recognition:', error);
         setIsVoiceActive(false);
         setIsListening(false);
-        setActiveVoiceField("");
-        setInterimTranscript("");
       }
     } else {
       // Start recording
-      console.log('JOURNAL Starting voice input for field:', fieldType);
-      try {
-        // Request microphone permission first
-        navigator.mediaDevices?.getUserMedia({ audio: true })
-          .then(() => {
-            setActiveVoiceField(fieldType);
-            setIsVoiceActive(true);
-            recognitionRef.current.start();
-            
-            toast({
-              title: "Voice Input Started", 
-              description: `Speak freely. Click the button again when you're done recording.`,
-            });
-          })
-          .catch((error) => {
-            console.error('Microphone permission denied:', error);
-            toast({
-              title: "Microphone Access Denied",
-              description: "Please allow microphone access to use voice input.",
-              variant: "destructive",
-            });
+      navigator.mediaDevices?.getUserMedia({ audio: true })
+        .then(() => {
+          setIsVoiceActive(true);
+          recognitionRef.current.start();
+        })
+        .catch((error) => {
+          console.error('Microphone permission denied:', error);
+          toast({
+            title: "Microphone Access Denied",
+            description: "Please allow microphone access to use voice input.",
+            variant: "destructive",
           });
-      } catch (error) {
-        console.error('Error starting recognition:', error);
-        toast({
-          title: "Voice Recognition Error",
-          description: "Unable to start voice input. Please try again.",
-          variant: "destructive",
         });
-      }
     }
+  };
+
+  // Insert voice message into target field
+  const insertVoiceMessage = () => {
+    if (!voiceMessage.trim()) {
+      toast({
+        title: "No Voice Input",
+        description: "Please record some voice input first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const textToInsert = voiceMessage.trim();
+
+    // Insert into appropriate field
+    if (targetField === 'general') {
+      setJournalContent(prev => prev ? `${prev} ${textToInsert}` : textToInsert);
+    } else if (targetField === 'affirmation') {
+      setAffirmation(prev => prev ? `${prev} ${textToInsert}` : textToInsert);
+    } else if (targetField === 'longTermVision') {
+      setLongTermVision(prev => prev ? `${prev} ${textToInsert}` : textToInsert);
+    } else if (targetField === 'gratitude' && targetFieldIndex !== null) {
+      const newGratitude = [...gratitude];
+      const currentText = newGratitude[targetFieldIndex];
+      newGratitude[targetFieldIndex] = currentText ? `${currentText} ${textToInsert}` : textToInsert;
+      setGratitude(newGratitude);
+    } else if (targetField === 'goal' && targetFieldIndex !== null) {
+      const newGoals = [...shortTermGoals];
+      const currentText = newGoals[targetFieldIndex];
+      newGoals[targetFieldIndex] = currentText ? `${currentText} ${textToInsert}` : textToInsert;
+      setShortTermGoals(newGoals);
+    }
+
+    // Close dialog and reset
+    setVoiceInputDialog(false);
+    setVoiceMessage('');
+    setTargetField('');
+    setTargetFieldIndex(null);
+    if (isVoiceActive && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.error('Error stopping recognition:', error);
+      }
+      setIsVoiceActive(false);
+      setIsListening(false);
+    }
+
+    toast({
+      title: "Voice Input Added",
+      description: "Your voice input has been added to the field.",
+    });
   };
   
   // Format date for display
@@ -591,30 +562,20 @@ export default function Journal() {
                           </div>
                           <Button
                             type="button"
-                            variant={isVoiceActive && activeVoiceField === 'general' ? "destructive" : "outline"}
+                            variant="outline"
                             size="icon"
-                            onClick={() => toggleVoiceJournaling('general')}
-                            className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === 'general' ? 'animate-pulse' : ''}`}
+                            onClick={() => openVoiceInput('general')}
                           >
-                            {isVoiceActive && activeVoiceField === 'general' && isListening ? (
-                              <Mic className="h-4 w-4" />
-                            ) : (
-                              <MicOff className="h-4 w-4" />
-                            )}
+                            <Mic className="h-4 w-4" />
                           </Button>
                         </div>
                         <div className="relative">
                           <Textarea
                             placeholder={t('generalPlaceholder') || "How are you feeling today? What's on your mind?"}
                             className="min-h-[200px] resize-none"
-                            value={journalContent + (activeVoiceField === 'general' && interimTranscript ? ` ${interimTranscript}` : '')}
+                            value={journalContent}
                             onChange={(e) => setJournalContent(e.target.value)}
                           />
-                          {isVoiceActive && activeVoiceField === 'general' && (
-                            <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium animate-pulse">
-                              Recording...
-                            </div>
-                          )}
                         </div>
                       </div>
                     </TabsContent>
@@ -629,31 +590,19 @@ export default function Journal() {
                         <div className="space-y-2">
                           {gratitude.map((item, index) => (
                             <div key={`gratitude-${index}`} className="flex gap-2 items-center">
-                              <div className="relative flex-grow">
-                                <Input
-                                  placeholder={`${t('gratitudePlaceholder') || "Gratitude"} ${index + 1}`}
-                                  value={item + (activeVoiceField === `gratitude-${index}` && interimTranscript ? ` ${interimTranscript}` : '')}
-                                  onChange={(e) => updateGratitude(index, e.target.value)}
-                                  className="flex-grow"
-                                />
-                                {isVoiceActive && activeVoiceField === `gratitude-${index}` && (
-                                  <div className="absolute top-1 right-1 bg-red-500 text-white px-1 py-0.5 rounded text-xs animate-pulse">
-                                    🎤
-                                  </div>
-                                )}
-                              </div>
+                              <Input
+                                placeholder={`${t('gratitudePlaceholder') || "Gratitude"} ${index + 1}`}
+                                value={item}
+                                onChange={(e) => updateGratitude(index, e.target.value)}
+                                className="flex-grow"
+                              />
                               <Button
                                 type="button"
-                                variant={isVoiceActive && activeVoiceField === `gratitude-${index}` ? "destructive" : "outline"}
+                                variant="outline"
                                 size="icon"
-                                onClick={() => toggleVoiceJournaling(`gratitude-${index}`)}
-                                className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === `gratitude-${index}` ? 'animate-pulse' : ''}`}
+                                onClick={() => openVoiceInput('gratitude', index)}
                               >
-                                {isVoiceActive && activeVoiceField === `gratitude-${index}` && isListening ? (
-                                  <Mic className="h-3 w-3" />
-                                ) : (
-                                  <MicOff className="h-3 w-3" />
-                                )}
+                                <Mic className="h-3 w-3" />
                               </Button>
                               {gratitude.length > 1 && (
                                 <Button 
@@ -779,30 +728,20 @@ export default function Journal() {
                             </h4>
                             <Button
                               type="button"
-                              variant={isVoiceActive && activeVoiceField === 'affirmation' ? "destructive" : "outline"}
+                              variant="outline"
                               size="sm"
-                              onClick={() => toggleVoiceJournaling('affirmation')}
-                              className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === 'affirmation' ? 'animate-pulse' : ''}`}
+                              onClick={() => openVoiceInput('affirmation')}
                             >
-                              {isVoiceActive && activeVoiceField === 'affirmation' && isListening ? (
-                                <Mic className="h-3 w-3" />
-                              ) : (
-                                <MicOff className="h-3 w-3" />
-                              )}
+                              <Mic className="h-3 w-3" />
                             </Button>
                           </div>
                           <div className="relative">
                             <Input
                               placeholder="I am..."
-                              value={affirmation + (activeVoiceField === 'affirmation' && interimTranscript ? ` ${interimTranscript}` : '')}
+                              value={affirmation}
                               onChange={(e) => setAffirmation(e.target.value)}
                               className="bg-white"
                             />
-                            {isVoiceActive && activeVoiceField === 'affirmation' && (
-                              <div className="absolute top-1 right-1 bg-red-500 text-white px-1 py-0.5 rounded text-xs animate-pulse">
-                                🎤
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -819,31 +758,19 @@ export default function Journal() {
                         <div className="space-y-2">
                           {shortTermGoals.map((goal, index) => (
                             <div key={`goal-${index}`} className="flex gap-2 items-center">
-                              <div className="relative flex-grow">
-                                <Input
-                                  placeholder={`${t('shortTermPlaceholder') || "Step"} ${index + 1}`}
-                                  value={goal + (activeVoiceField === `goal-${index}` && interimTranscript ? ` ${interimTranscript}` : '')}
-                                  onChange={(e) => updateShortTermGoal(index, e.target.value)}
-                                  className="flex-grow"
-                                />
-                                {isVoiceActive && activeVoiceField === `goal-${index}` && (
-                                  <div className="absolute top-1 right-1 bg-red-500 text-white px-1 py-0.5 rounded text-xs animate-pulse">
-                                    🎤
-                                  </div>
-                                )}
-                              </div>
+                              <Input
+                                placeholder={`${t('shortTermPlaceholder') || "Step"} ${index + 1}`}
+                                value={goal}
+                                onChange={(e) => updateShortTermGoal(index, e.target.value)}
+                                className="flex-grow"
+                              />
                               <Button
                                 type="button"
-                                variant={isVoiceActive && activeVoiceField === `goal-${index}` ? "destructive" : "outline"}
+                                variant="outline"
                                 size="icon"
-                                onClick={() => toggleVoiceJournaling(`goal-${index}`)}
-                                className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === `goal-${index}` ? 'animate-pulse' : ''}`}
+                                onClick={() => openVoiceInput('goal', index)}
                               >
-                                {isVoiceActive && activeVoiceField === `goal-${index}` && isListening ? (
-                                  <Mic className="h-3 w-3" />
-                                ) : (
-                                  <MicOff className="h-3 w-3" />
-                                )}
+                                <Mic className="h-3 w-3" />
                               </Button>
                               {shortTermGoals.length > 1 && (
                                 <Button 
@@ -883,30 +810,20 @@ export default function Journal() {
                           </div>
                           <Button
                             type="button"
-                            variant={isVoiceActive && activeVoiceField === 'longTermVision' ? "destructive" : "outline"}
+                            variant="outline"
                             size="icon"
-                            onClick={() => toggleVoiceJournaling('longTermVision')}
-                            className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === 'longTermVision' ? 'animate-pulse' : ''}`}
+                            onClick={() => openVoiceInput('longTermVision')}
                           >
-                            {isVoiceActive && activeVoiceField === 'longTermVision' && isListening ? (
-                              <Mic className="h-4 w-4" />
-                            ) : (
-                              <MicOff className="h-4 w-4" />
-                            )}
+                            <Mic className="h-4 w-4" />
                           </Button>
                         </div>
                         <div className="relative">
                           <Textarea
                             placeholder={t('longTermPlaceholder') || "My long-term vision includes..."}
                             className="min-h-[150px] resize-none"
-                            value={longTermVision + (activeVoiceField === 'longTermVision' && interimTranscript ? ` ${interimTranscript}` : '')}
+                            value={longTermVision}
                             onChange={(e) => setLongTermVision(e.target.value)}
                           />
-                          {isVoiceActive && activeVoiceField === 'longTermVision' && (
-                            <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium animate-pulse">
-                              Recording...
-                            </div>
-                          )}
                         </div>
                       </div>
                     </TabsContent>
@@ -916,14 +833,13 @@ export default function Journal() {
                 <CardFooter className="flex justify-between">
                   <Button 
                     type="button" 
-                    variant={isVoiceActive || isListening ? "destructive" : "outline"}
+                    variant="outline"
                     onClick={(e) => {
                       e.preventDefault();
                       console.log('Voice Journal button clicked!');
-                      toggleVoiceJournaling('general');
+                      openVoiceInput('general');
                     }}
-                    className={`relative ${isListening ? 'animate-pulse' : ''}`}
-                    title={isListening ? "Listening... Click to stop" : "Start voice input"}
+                    title="Start voice input"
                   >
                     {isVoiceActive || isListening ? (
                       <>
@@ -1167,6 +1083,79 @@ export default function Journal() {
           onClose={() => setShowDiaryCalendar(false)}
           journalEntries={journalEntries || []}
         />
+
+        {/* Voice Input Dialog */}
+        <Dialog open={voiceInputDialog} onOpenChange={setVoiceInputDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Voice Input</DialogTitle>
+              <DialogDescription>
+                Record your voice input and click "Insert" to add it to your journal field.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="relative">
+                <Input
+                  value={voiceMessage + (interimTranscript ? ` ${interimTranscript}` : '')}
+                  onChange={(e) => setVoiceMessage(e.target.value)}
+                  placeholder="Voice input will appear here..."
+                  className="min-h-[80px] p-3"
+                />
+                {isVoiceActive && isListening && (
+                  <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium animate-pulse">
+                    Recording...
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  onClick={toggleVoiceRecording}
+                  variant={isVoiceActive ? "destructive" : "outline"}
+                  className={`flex-1 ${isVoiceActive ? 'animate-pulse' : ''}`}
+                >
+                  {isVoiceActive && isListening ? (
+                    <>
+                      <MicOff className="h-4 w-4 mr-2" />
+                      Stop Recording
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-4 w-4 mr-2" />
+                      Start Recording
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setVoiceInputDialog(false);
+                  setVoiceMessage('');
+                  if (isVoiceActive && recognitionRef.current) {
+                    try {
+                      recognitionRef.current.stop();
+                    } catch (error) {
+                      console.error('Error stopping recognition:', error);
+                    }
+                    setIsVoiceActive(false);
+                    setIsListening(false);
+                  }
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={insertVoiceMessage}>
+                <Send className="h-4 w-4 mr-2" />
+                Insert
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
