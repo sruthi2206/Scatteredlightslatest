@@ -158,11 +158,14 @@ export default function Journal() {
               
               // Update the appropriate field with final text
               if (finalText.trim()) {
+                console.log('JOURNAL Adding final text to field:', activeVoiceField, 'Text:', finalText.trim());
                 if (activeVoiceField === 'general') {
                   setJournalContent(prev => {
                     const currentText = prev.trim();
                     const newText = finalText.trim();
-                    return currentText ? `${currentText} ${newText}` : newText;
+                    const result = currentText ? `${currentText} ${newText}` : newText;
+                    console.log('JOURNAL Updated journal content:', result);
+                    return result;
                   });
                 } else if (activeVoiceField === 'affirmation') {
                   setAffirmation(prev => {
@@ -178,62 +181,80 @@ export default function Journal() {
                   });
                 } else if (activeVoiceField.startsWith('gratitude-')) {
                   const index = parseInt(activeVoiceField.split('-')[1]);
-                  updateGratitude(index, finalText.trim());
+                  const newGratitude = [...gratitude];
+                  const currentText = newGratitude[index].trim();
+                  const newText = finalText.trim();
+                  newGratitude[index] = currentText ? `${currentText} ${newText}` : newText;
+                  setGratitude(newGratitude);
                 } else if (activeVoiceField.startsWith('goal-')) {
                   const index = parseInt(activeVoiceField.split('-')[1]);
-                  updateShortTermGoal(index, finalText.trim());
+                  const newGoals = [...shortTermGoals];
+                  const currentText = newGoals[index].trim();
+                  const newText = finalText.trim();
+                  newGoals[index] = currentText ? `${currentText} ${newText}` : newText;
+                  setShortTermGoals(newGoals);
                 }
               }
             };
             
             recognitionRef.current.onend = () => {
-              console.log('Speech recognition ended');
+              console.log('JOURNAL Speech recognition ended, isVoiceActive:', isVoiceActive, 'activeVoiceField:', activeVoiceField);
               setIsListening(false);
-              setInterimTranscript('');
               
-              // Auto-restart if voice is still active (for continuous listening)
-              // Use a ref check to avoid race conditions with state updates
-              restartTimeoutRef.current = setTimeout(() => {
-                if (isVoiceActive && activeVoiceField && recognitionRef.current) {
+              // Only restart if voice is still meant to be active
+              // Don't clear interim transcript here to avoid losing content
+              if (isVoiceActive && activeVoiceField && recognitionRef.current) {
+                console.log('JOURNAL Auto-restarting speech recognition...');
+                restartTimeoutRef.current = setTimeout(() => {
                   try {
-                    console.log('Auto-restarting speech recognition...');
-                    recognitionRef.current.start();
+                    if (isVoiceActive && activeVoiceField && recognitionRef.current) {
+                      recognitionRef.current.start();
+                    }
                   } catch (error) {
-                    console.error('Error restarting recognition:', error);
-                    // If restart fails, stop voice input
-                    setIsVoiceActive(false);
-                    setActiveVoiceField("");
+                    console.error('JOURNAL Error restarting recognition:', error);
                   }
-                }
-              }, 100); // Small delay to prevent rapid restarts
+                }, 300); // Longer delay to prevent rapid restarts
+              } else {
+                // Only clear interim transcript when actually stopping
+                setInterimTranscript('');
+                setIsVoiceActive(false);
+                setActiveVoiceField("");
+              }
             };
             
             recognitionRef.current.onerror = (event: any) => {
-              console.error('Speech recognition error:', event);
+              console.error('JOURNAL Speech recognition error:', event.error);
               setIsListening(false);
-              setInterimTranscript('');
               
-              // Only show error for serious issues, not for normal speech gaps
-              if (event.error !== 'no-speech' && event.error !== 'audio-capture') {
+              // Handle different error types appropriately
+              if (event.error === 'no-speech') {
+                // Don't stop for no-speech errors, just continue
+                console.log('JOURNAL No speech detected, continuing...');
+                return;
+              } else if (event.error === 'audio-capture') {
+                // Audio capture issues, try to continue
+                console.log('JOURNAL Audio capture issue, continuing...');
+                return;
+              } else if (event.error === 'not-allowed') {
+                // Permission denied - stop voice input
                 setIsVoiceActive(false);
                 setActiveVoiceField("");
+                setInterimTranscript('');
                 
-                let errorMessage = "Please try again.";
-                switch (event.error) {
-                  case 'not-allowed':
-                    errorMessage = "Microphone access denied. Please allow microphone access.";
-                    break;
-                  case 'network':
-                    errorMessage = "Network error. Please check your connection.";
-                    break;
-                  case 'service-not-allowed':
-                    errorMessage = "Speech service not allowed. Please try again.";
-                    break;
-                }
+                toast({
+                  title: "Microphone Access Denied",
+                  description: "Please allow microphone access to use voice input.",
+                  variant: "destructive",
+                });
+              } else {
+                // Other serious errors - stop voice input
+                setIsVoiceActive(false);
+                setActiveVoiceField("");
+                setInterimTranscript('');
                 
                 toast({
                   title: "Voice Recognition Error",
-                  description: errorMessage,
+                  description: `Error: ${event.error}. Please try again.`,
                   variant: "destructive",
                 });
               }
