@@ -8,9 +8,12 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+// Parse DATABASE_URL to check if it's a local connection
+const isLocalDB = process.env.DATABASE_URL?.includes('localhost') || process.env.DATABASE_URL?.includes('127.0.0.1');
+
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
-  ssl: false // Disable SSL for direct PostgreSQL connection
+  ssl: false // Always disable SSL for Replit's internal PostgreSQL
 });
 
 export const db = drizzle(pool, { schema });
