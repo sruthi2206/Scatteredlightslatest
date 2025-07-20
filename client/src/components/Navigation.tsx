@@ -220,7 +220,7 @@ export default function Navigation() {
             </Link>
             
             <div className="hidden md:flex items-center space-x-1">
-              {user && navItems.filter(item => visibleItems.includes(item.name)).map((item, index) => {
+              {user ? navItems.filter(item => visibleItems.includes(item.name)).map((item, index) => {
                 if (item.dropdownItems) {
                   return (
                     <div key={index} className="relative group">
@@ -261,7 +261,7 @@ export default function Navigation() {
                     </Button>
                   </Link>
                 );
-              })}
+              }) : null}
             </div>
             
             <div className="hidden md:block">
@@ -322,7 +322,7 @@ export default function Navigation() {
           >
             <div className="container mx-auto px-4 py-4">
               <div className="flex flex-col space-y-2">
-                {user && navItems.filter(item => visibleItems.includes(item.name)).map((item, index) => {
+                {user ? navItems.filter(item => visibleItems.includes(item.name)).map((item, index) => {
                   if (item.dropdownItems) {
                     return (
                       <div key={index} className="space-y-1">
@@ -357,7 +357,7 @@ export default function Navigation() {
                       </div>
                     </Link>
                   );
-                })}
+                }) : null}
                 
                 <div className="pt-4 border-t border-neutral-200 mt-4">
                   {user ? (
