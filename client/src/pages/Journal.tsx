@@ -87,8 +87,9 @@ export default function Journal() {
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [activeVoiceField, setActiveVoiceField] = useState<string>("");
+  const [interimTranscript, setInterimTranscript] = useState("");
   const recognitionRef = useRef<any>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -107,9 +108,9 @@ export default function Journal() {
           
           if (recognitionRef.current) {
             recognitionRef.current.continuous = true;
-            recognitionRef.current.interimResults = false;
+            recognitionRef.current.interimResults = true;
             recognitionRef.current.lang = 'en-US';
-            recognitionRef.current.maxAlternatives = 3;
+            recognitionRef.current.maxAlternatives = 1;
             
             recognitionRef.current.onstart = () => {
               console.log('Speech recognition started');
@@ -119,30 +120,20 @@ export default function Journal() {
             
             recognitionRef.current.onresult = (event: any) => {
               console.log('Speech recognition result:', event);
-              let finalTranscript = '';
+              let interimText = '';
+              let finalText = '';
               
               for (let i = event.resultIndex; i < event.results.length; i++) {
                 const result = event.results[i];
+                const transcript = result[0].transcript;
+                
                 if (result.isFinal) {
-                  // Get the best result from alternatives
-                  let bestTranscript = result[0].transcript;
-                  let bestConfidence = result[0].confidence || 0;
-                  
-                  // Check alternatives for better confidence
-                  for (let j = 0; j < result.length; j++) {
-                    const alternative = result[j];
-                    if (alternative.confidence > bestConfidence) {
-                      bestTranscript = alternative.transcript;
-                      bestConfidence = alternative.confidence;
-                    }
-                  }
-                  
-                  // Clean up the transcript
-                  const cleanedTranscript = bestTranscript
+                  // Clean up the final transcript
+                  const cleanedTranscript = transcript
                     .trim()
                     .replace(/\s+/g, ' ')
                     .replace(/\b(kill|steel|deal)\b/gi, (match: string) => {
-                      const text = bestTranscript.toLowerCase();
+                      const text = transcript.toLowerCase();
                       const corrections: { [key: string]: string } = {
                         'kill': text.includes('speech') || text.includes('text') ? 'create' : match,
                         'steel': 'still',
@@ -151,34 +142,46 @@ export default function Journal() {
                       return corrections[match.toLowerCase()] || match;
                     })
                     .replace(/^./, (match: string) => match.toUpperCase())
-                    .replace(/\.$/, '')
                     .trim();
                   
-                  finalTranscript += cleanedTranscript + ' ';
-                  console.log('Final transcript:', cleanedTranscript, 'Confidence:', bestConfidence);
+                  finalText += cleanedTranscript + ' ';
+                  console.log('Final transcript:', cleanedTranscript);
+                  
+                  // Clear interim transcript when we get final result
+                  setInterimTranscript('');
+                } else {
+                  // Show interim results for real-time feedback
+                  interimText += transcript;
+                  setInterimTranscript(interimText);
                 }
               }
               
-              if (finalTranscript.trim()) {
-                // Update the appropriate field based on activeVoiceField
+              // Update the appropriate field with final text
+              if (finalText.trim()) {
                 if (activeVoiceField === 'general') {
                   setJournalContent(prev => {
                     const currentText = prev.trim();
-                    const newText = finalTranscript.trim();
+                    const newText = finalText.trim();
                     return currentText ? `${currentText} ${newText}` : newText;
                   });
                 } else if (activeVoiceField === 'affirmation') {
                   setAffirmation(prev => {
                     const currentText = prev.trim();
-                    const newText = finalTranscript.trim();
+                    const newText = finalText.trim();
                     return currentText ? `${currentText} ${newText}` : newText;
                   });
                 } else if (activeVoiceField === 'longTermVision') {
                   setLongTermVision(prev => {
                     const currentText = prev.trim();
-                    const newText = finalTranscript.trim();
+                    const newText = finalText.trim();
                     return currentText ? `${currentText} ${newText}` : newText;
                   });
+                } else if (activeVoiceField.startsWith('gratitude-')) {
+                  const index = parseInt(activeVoiceField.split('-')[1]);
+                  updateGratitude(index, finalText.trim());
+                } else if (activeVoiceField.startsWith('goal-')) {
+                  const index = parseInt(activeVoiceField.split('-')[1]);
+                  updateShortTermGoal(index, finalText.trim());
                 }
               }
             };
@@ -186,20 +189,55 @@ export default function Journal() {
             recognitionRef.current.onend = () => {
               console.log('Speech recognition ended');
               setIsListening(false);
-              setIsVoiceActive(false);
-              setActiveVoiceField("");
+              setInterimTranscript('');
+              
+              // Auto-restart if voice is still active (for continuous listening)
+              if (isVoiceActive && activeVoiceField) {
+                console.log('Auto-restarting speech recognition...');
+                restartTimeoutRef.current = setTimeout(() => {
+                  if (isVoiceActive && recognitionRef.current) {
+                    try {
+                      recognitionRef.current.start();
+                    } catch (error) {
+                      console.error('Error restarting recognition:', error);
+                    }
+                  }
+                }, 100); // Small delay to prevent rapid restarts
+              } else {
+                setIsVoiceActive(false);
+                setActiveVoiceField("");
+              }
             };
             
             recognitionRef.current.onerror = (event: any) => {
               console.error('Speech recognition error:', event);
               setIsListening(false);
-              setIsVoiceActive(false);
-              setActiveVoiceField("");
-              toast({
-                title: "Voice Recognition Error",
-                description: `Error: ${event.error || 'Unknown error'}. Please try again.`,
-                variant: "destructive",
-              });
+              setInterimTranscript('');
+              
+              // Only show error for serious issues, not for normal speech gaps
+              if (event.error !== 'no-speech' && event.error !== 'audio-capture') {
+                setIsVoiceActive(false);
+                setActiveVoiceField("");
+                
+                let errorMessage = "Please try again.";
+                switch (event.error) {
+                  case 'not-allowed':
+                    errorMessage = "Microphone access denied. Please allow microphone access.";
+                    break;
+                  case 'network':
+                    errorMessage = "Network error. Please check your connection.";
+                    break;
+                  case 'service-not-allowed':
+                    errorMessage = "Speech service not allowed. Please try again.";
+                    break;
+                }
+                
+                toast({
+                  title: "Voice Recognition Error",
+                  description: errorMessage,
+                  variant: "destructive",
+                });
+              }
             };
           }
         } catch (error) {
@@ -213,6 +251,9 @@ export default function Journal() {
     }
     
     return () => {
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -221,7 +262,7 @@ export default function Journal() {
         }
       }
     };
-  }, [toast, isListening, activeVoiceField]);
+  }, [toast, isVoiceActive, activeVoiceField]);
   
   // Fetch user's journal entries
   const { data: journalEntries, isLoading } = useQuery({
@@ -515,16 +556,40 @@ export default function Journal() {
                     
                     <TabsContent value="general">
                       <div className="space-y-4">
-                        <h3 className="text-lg font-medium text-neutral-800">{t('generalTitle') || "💭 General Reflections"}</h3>
-                        <p className="text-sm text-neutral-600">
-                          {t('generalDescription') || "Write freely about your thoughts, emotions, and experiences"}
-                        </p>
-                        <Textarea
-                          placeholder={t('generalPlaceholder') || "How are you feeling today? What's on your mind?"}
-                          className="min-h-[200px] resize-none"
-                          value={journalContent}
-                          onChange={(e) => setJournalContent(e.target.value)}
-                        />
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-medium text-neutral-800">{t('generalTitle') || "💭 General Reflections"}</h3>
+                            <p className="text-sm text-neutral-600">
+                              {t('generalDescription') || "Write freely about your thoughts, emotions, and experiences"}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant={isVoiceActive && activeVoiceField === 'general' ? "destructive" : "outline"}
+                            size="icon"
+                            onClick={() => toggleVoiceJournaling('general')}
+                            className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === 'general' ? 'animate-pulse' : ''}`}
+                          >
+                            {isVoiceActive && activeVoiceField === 'general' && isListening ? (
+                              <Mic className="h-4 w-4" />
+                            ) : (
+                              <MicOff className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="relative">
+                          <Textarea
+                            placeholder={t('generalPlaceholder') || "How are you feeling today? What's on your mind?"}
+                            className="min-h-[200px] resize-none"
+                            value={journalContent + (activeVoiceField === 'general' && interimTranscript ? ` ${interimTranscript}` : '')}
+                            onChange={(e) => setJournalContent(e.target.value)}
+                          />
+                          {isVoiceActive && activeVoiceField === 'general' && (
+                            <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium animate-pulse">
+                              Recording...
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </TabsContent>
                     
@@ -537,13 +602,33 @@ export default function Journal() {
                         
                         <div className="space-y-2">
                           {gratitude.map((item, index) => (
-                            <div key={`gratitude-${index}`} className="flex gap-2">
-                              <Input
-                                placeholder={`${t('gratitudePlaceholder') || "Gratitude"} ${index + 1}`}
-                                value={item}
-                                onChange={(e) => updateGratitude(index, e.target.value)}
-                                className="flex-grow"
-                              />
+                            <div key={`gratitude-${index}`} className="flex gap-2 items-center">
+                              <div className="relative flex-grow">
+                                <Input
+                                  placeholder={`${t('gratitudePlaceholder') || "Gratitude"} ${index + 1}`}
+                                  value={item + (activeVoiceField === `gratitude-${index}` && interimTranscript ? ` ${interimTranscript}` : '')}
+                                  onChange={(e) => updateGratitude(index, e.target.value)}
+                                  className="flex-grow"
+                                />
+                                {isVoiceActive && activeVoiceField === `gratitude-${index}` && (
+                                  <div className="absolute top-1 right-1 bg-red-500 text-white px-1 py-0.5 rounded text-xs animate-pulse">
+                                    🎤
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                variant={isVoiceActive && activeVoiceField === `gratitude-${index}` ? "destructive" : "outline"}
+                                size="icon"
+                                onClick={() => toggleVoiceJournaling(`gratitude-${index}`)}
+                                className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === `gratitude-${index}` ? 'animate-pulse' : ''}`}
+                              >
+                                {isVoiceActive && activeVoiceField === `gratitude-${index}` && isListening ? (
+                                  <Mic className="h-3 w-3" />
+                                ) : (
+                                  <MicOff className="h-3 w-3" />
+                                )}
+                              </Button>
                               {gratitude.length > 1 && (
                                 <Button 
                                   type="button" 
@@ -661,16 +746,38 @@ export default function Journal() {
 
                         {/* Original simple affirmation field */}
                         <div className="space-y-4 bg-gradient-to-r from-rose-50 to-pink-50 p-4 rounded-lg border border-rose-100">
-                          <h4 className="text-md font-semibold text-rose-800 flex items-center">
-                            <Rocket className="w-4 h-4 mr-2" />
-                            Personal Affirmation
-                          </h4>
-                          <Input
-                            placeholder="I am..."
-                            value={affirmation}
-                            onChange={(e) => setAffirmation(e.target.value)}
-                            className="bg-white"
-                          />
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-md font-semibold text-rose-800 flex items-center">
+                              <Rocket className="w-4 h-4 mr-2" />
+                              Personal Affirmation
+                            </h4>
+                            <Button
+                              type="button"
+                              variant={isVoiceActive && activeVoiceField === 'affirmation' ? "destructive" : "outline"}
+                              size="sm"
+                              onClick={() => toggleVoiceJournaling('affirmation')}
+                              className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === 'affirmation' ? 'animate-pulse' : ''}`}
+                            >
+                              {isVoiceActive && activeVoiceField === 'affirmation' && isListening ? (
+                                <Mic className="h-3 w-3" />
+                              ) : (
+                                <MicOff className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                          <div className="relative">
+                            <Input
+                              placeholder="I am..."
+                              value={affirmation + (activeVoiceField === 'affirmation' && interimTranscript ? ` ${interimTranscript}` : '')}
+                              onChange={(e) => setAffirmation(e.target.value)}
+                              className="bg-white"
+                            />
+                            {isVoiceActive && activeVoiceField === 'affirmation' && (
+                              <div className="absolute top-1 right-1 bg-red-500 text-white px-1 py-0.5 rounded text-xs animate-pulse">
+                                🎤
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       
@@ -685,13 +792,33 @@ export default function Journal() {
                         
                         <div className="space-y-2">
                           {shortTermGoals.map((goal, index) => (
-                            <div key={`goal-${index}`} className="flex gap-2">
-                              <Input
-                                placeholder={`${t('shortTermPlaceholder') || "Step"} ${index + 1}`}
-                                value={goal}
-                                onChange={(e) => updateShortTermGoal(index, e.target.value)}
-                                className="flex-grow"
-                              />
+                            <div key={`goal-${index}`} className="flex gap-2 items-center">
+                              <div className="relative flex-grow">
+                                <Input
+                                  placeholder={`${t('shortTermPlaceholder') || "Step"} ${index + 1}`}
+                                  value={goal + (activeVoiceField === `goal-${index}` && interimTranscript ? ` ${interimTranscript}` : '')}
+                                  onChange={(e) => updateShortTermGoal(index, e.target.value)}
+                                  className="flex-grow"
+                                />
+                                {isVoiceActive && activeVoiceField === `goal-${index}` && (
+                                  <div className="absolute top-1 right-1 bg-red-500 text-white px-1 py-0.5 rounded text-xs animate-pulse">
+                                    🎤
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                variant={isVoiceActive && activeVoiceField === `goal-${index}` ? "destructive" : "outline"}
+                                size="icon"
+                                onClick={() => toggleVoiceJournaling(`goal-${index}`)}
+                                className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === `goal-${index}` ? 'animate-pulse' : ''}`}
+                              >
+                                {isVoiceActive && activeVoiceField === `goal-${index}` && isListening ? (
+                                  <Mic className="h-3 w-3" />
+                                ) : (
+                                  <MicOff className="h-3 w-3" />
+                                )}
+                              </Button>
                               {shortTermGoals.length > 1 && (
                                 <Button 
                                   type="button" 
@@ -721,16 +848,40 @@ export default function Journal() {
                     
                     <TabsContent value="longterm">
                       <div className="space-y-4">
-                        <h3 className="text-lg font-medium text-neutral-800">{t('longTermTitle') || "🚀 Steps toward my long-term goals"}</h3>
-                        <p className="text-sm text-neutral-600">
-                          {t('longTermDescription') || "What aligned actions or habits will move you toward your vision?"}
-                        </p>
-                        <Textarea
-                          placeholder={t('longTermPlaceholder') || "My long-term vision includes..."}
-                          className="min-h-[150px] resize-none"
-                          value={longTermVision}
-                          onChange={(e) => setLongTermVision(e.target.value)}
-                        />
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-medium text-neutral-800">{t('longTermTitle') || "🚀 Steps toward my long-term goals"}</h3>
+                            <p className="text-sm text-neutral-600">
+                              {t('longTermDescription') || "What aligned actions or habits will move you toward your vision?"}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant={isVoiceActive && activeVoiceField === 'longTermVision' ? "destructive" : "outline"}
+                            size="icon"
+                            onClick={() => toggleVoiceJournaling('longTermVision')}
+                            className={`transition-all duration-200 ${isVoiceActive && activeVoiceField === 'longTermVision' ? 'animate-pulse' : ''}`}
+                          >
+                            {isVoiceActive && activeVoiceField === 'longTermVision' && isListening ? (
+                              <Mic className="h-4 w-4" />
+                            ) : (
+                              <MicOff className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                        <div className="relative">
+                          <Textarea
+                            placeholder={t('longTermPlaceholder') || "My long-term vision includes..."}
+                            className="min-h-[150px] resize-none"
+                            value={longTermVision + (activeVoiceField === 'longTermVision' && interimTranscript ? ` ${interimTranscript}` : '')}
+                            onChange={(e) => setLongTermVision(e.target.value)}
+                          />
+                          {isVoiceActive && activeVoiceField === 'longTermVision' && (
+                            <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-medium animate-pulse">
+                              Recording...
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </TabsContent>
                   </Tabs>

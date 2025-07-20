@@ -99,7 +99,7 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
   const [conversationId, setConversationId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   
   // Get coach config
@@ -121,7 +121,7 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
                             window.innerWidth >= 768;
             
             // Mobile-optimized settings
-            recognitionRef.current.continuous = false; // Always false for mobile compatibility
+            recognitionRef.current.continuous = true; // Enable continuous for toggle functionality
             recognitionRef.current.interimResults = true;
             recognitionRef.current.lang = 'en-US';
             recognitionRef.current.maxAlternatives = 1;
@@ -187,40 +187,53 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
             recognitionRef.current.onend = () => {
               console.log('Speech recognition ended');
               setIsListening(false);
-              setIsVoiceActive(false);
-              setInterimTranscript(''); // Clear interim transcript
+              setInterimTranscript('');
+              
+              // Auto-restart if voice is still active (for continuous listening)
+              if (isVoiceActive) {
+                console.log('Auto-restarting speech recognition...');
+                restartTimeoutRef.current = setTimeout(() => {
+                  if (isVoiceActive && recognitionRef.current) {
+                    try {
+                      recognitionRef.current.start();
+                    } catch (error) {
+                      console.error('Error restarting recognition:', error);
+                    }
+                  }
+                }, 100); // Small delay to prevent rapid restarts
+              } else {
+                setIsVoiceActive(false);
+              }
             };
             
             recognitionRef.current.onerror = (event: any) => {
               console.error('Speech recognition error:', event);
               setIsListening(false);
-              setIsVoiceActive(false);
-              setInterimTranscript(''); // Clear interim transcript
+              setInterimTranscript('');
               
-              // Show specific error messages
-              let errorMessage = "Please try again.";
-              switch (event.error) {
-                case 'no-speech':
-                  errorMessage = "No speech was detected. Please try speaking again.";
-                  break;
-                case 'audio-capture':
-                  errorMessage = "Microphone not accessible. Please check your microphone settings.";
-                  break;
-                case 'not-allowed':
-                  errorMessage = "Microphone access was denied. Please allow microphone access and try again.";
-                  break;
-                case 'network':
-                  errorMessage = "Network error occurred. Please check your connection and try again.";
-                  break;
-                default:
-                  errorMessage = `Error: ${event.error}. Please try again.`;
+              // Only show error for serious issues, not for normal speech gaps
+              if (event.error !== 'no-speech' && event.error !== 'audio-capture') {
+                setIsVoiceActive(false);
+                
+                let errorMessage = "Please try again.";
+                switch (event.error) {
+                  case 'not-allowed':
+                    errorMessage = "Microphone access denied. Please allow microphone access.";
+                    break;
+                  case 'network':
+                    errorMessage = "Network error. Please check your connection.";
+                    break;
+                  case 'service-not-allowed':
+                    errorMessage = "Speech service not allowed. Please try again.";
+                    break;
+                }
+                
+                toast({
+                  title: "Voice Recognition Error",
+                  description: errorMessage,
+                  variant: "destructive",
+                });
               }
-              
-              toast({
-                title: "Voice Recognition Error",
-                description: errorMessage,
-                variant: "destructive",
-              });
             };
           }
         } catch (error) {
@@ -232,15 +245,15 @@ export default function CoachChat({ coachType, userId }: CoachChatProps) {
     }
     
     return () => {
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
         } catch (error) {
           console.error('Error stopping speech recognition:', error);
         }
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
       }
     };
   }, [toast]);
