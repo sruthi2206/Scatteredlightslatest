@@ -159,7 +159,7 @@ class EmailService {
   }
 
   async sendWelcomeEmail(to: string, username: string): Promise<boolean> {
-    / Use CLIENT_URL for the domain, fallback to localhost:5000 for development  
+    // Use CLIENT_URL for the domain, fallback to localhost:5000 for development  
     const baseUrl = process.env.CLIENT_URL || process.env.REPL_URL || 'http://localhost:5000';
     const loginUrl = `${baseUrl}/auth`;
 
