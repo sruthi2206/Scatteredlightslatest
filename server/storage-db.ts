@@ -40,13 +40,23 @@ export class DatabaseStorage implements IStorage {
 
   constructor() {
     // Use PostgreSQL for session storage in production
-    this.sessionStore = new PostgresSessionStore({
-      pool,
-      createTableIfMissing: true
-    });
+    try {
+      this.sessionStore = new PostgresSessionStore({
+        pool,
+        createTableIfMissing: true
+      });
+    } catch (error) {
+      console.error('Error creating PostgreSQL session store:', error);
+      // Fallback to memory store if PostgreSQL fails
+      this.sessionStore = new (require('memorystore')(session))({
+        checkPeriod: 86400000 // prune expired entries every 24h
+      });
+    }
     
     // Initialize healing rituals if needed
-    this.initializeHealingRituals();
+    this.initializeHealingRituals().catch(error => {
+      console.error('Error initializing healing rituals:', error);
+    });
   }
 
   async getUser(id: number): Promise<User | undefined> {
