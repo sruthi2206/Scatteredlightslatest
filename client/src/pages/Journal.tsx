@@ -192,21 +192,20 @@ export default function Journal() {
               setInterimTranscript('');
               
               // Auto-restart if voice is still active (for continuous listening)
-              if (isVoiceActive && activeVoiceField) {
-                console.log('Auto-restarting speech recognition...');
-                restartTimeoutRef.current = setTimeout(() => {
-                  if (isVoiceActive && recognitionRef.current) {
-                    try {
-                      recognitionRef.current.start();
-                    } catch (error) {
-                      console.error('Error restarting recognition:', error);
-                    }
+              // Use a ref check to avoid race conditions with state updates
+              restartTimeoutRef.current = setTimeout(() => {
+                if (isVoiceActive && activeVoiceField && recognitionRef.current) {
+                  try {
+                    console.log('Auto-restarting speech recognition...');
+                    recognitionRef.current.start();
+                  } catch (error) {
+                    console.error('Error restarting recognition:', error);
+                    // If restart fails, stop voice input
+                    setIsVoiceActive(false);
+                    setActiveVoiceField("");
                   }
-                }, 100); // Small delay to prevent rapid restarts
-              } else {
-                setIsVoiceActive(false);
-                setActiveVoiceField("");
-              }
+                }
+              }, 100); // Small delay to prevent rapid restarts
             };
             
             recognitionRef.current.onerror = (event: any) => {
@@ -262,7 +261,7 @@ export default function Journal() {
         }
       }
     };
-  }, [toast, isVoiceActive, activeVoiceField]);
+  }, [toast]);
   
   // Fetch user's journal entries
   const { data: journalEntries, isLoading } = useQuery({
@@ -369,12 +368,16 @@ export default function Journal() {
   
   // Toggle voice journaling
   const toggleVoiceJournaling = (fieldType: string = 'general') => {
-    console.log('Voice recording button clicked', { fieldType, isVoiceActive, isListening });
+    console.log('JOURNAL Voice recording button clicked', { fieldType, isVoiceActive, isListening, activeVoiceField });
+    
+    // Clear any existing restart timeout
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
     
     // Check browser support
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
-    console.log('Speech recognition support:', !!SpeechRecognition);
     
     if (!SpeechRecognition) {
       toast({
@@ -394,16 +397,16 @@ export default function Journal() {
       });
       return;
     }
-    
-    console.log('Recognition ref exists:', !!recognitionRef.current);
 
-    if (isVoiceActive || isListening) {
+    if (isVoiceActive && activeVoiceField) {
       // Stop recording
+      console.log('JOURNAL Stopping voice input...');
       try {
         recognitionRef.current.stop();
         setIsVoiceActive(false);
         setIsListening(false);
         setActiveVoiceField("");
+        setInterimTranscript("");
         
         toast({
           title: "Voice Input Stopped",
@@ -414,16 +417,18 @@ export default function Journal() {
         setIsVoiceActive(false);
         setIsListening(false);
         setActiveVoiceField("");
+        setInterimTranscript("");
       }
     } else {
       // Start recording
+      console.log('JOURNAL Starting voice input for field:', fieldType);
       try {
         // Request microphone permission first
         navigator.mediaDevices?.getUserMedia({ audio: true })
           .then(() => {
             setActiveVoiceField(fieldType);
-            recognitionRef.current.start();
             setIsVoiceActive(true);
+            recognitionRef.current.start();
             
             toast({
               title: "Voice Input Started", 
