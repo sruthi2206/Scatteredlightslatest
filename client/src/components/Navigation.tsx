@@ -220,7 +220,7 @@ export default function Navigation() {
             </Link>
             
             <div className="hidden md:flex items-center space-x-1">
-              {navItems.filter(item => visibleItems.includes(item.name)).map((item, index) => {
+              {user && navItems.filter(item => visibleItems.includes(item.name)).map((item, index) => {
                 if (item.dropdownItems) {
                   return (
                     <div key={index} className="relative group">
@@ -322,7 +322,7 @@ export default function Navigation() {
           >
             <div className="container mx-auto px-4 py-4">
               <div className="flex flex-col space-y-2">
-                {navItems.filter(item => visibleItems.includes(item.name)).map((item, index) => {
+                {user && navItems.filter(item => visibleItems.includes(item.name)).map((item, index) => {
                   if (item.dropdownItems) {
                     return (
                       <div key={index} className="space-y-1">

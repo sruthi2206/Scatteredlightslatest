@@ -214,7 +214,7 @@ export default function AuthPage() {
   };
   
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4 pt-20">
       <div className="w-full max-w-5xl">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white rounded-xl shadow-lg overflow-hidden">
           {/* Auth Form */}
@@ -222,7 +222,7 @@ export default function AuthPage() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
-            className="p-8"
+            className="p-4 sm:p-8"
           >
             <div className="mb-8">
               <h1 className="text-2xl font-heading font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-[#483D8B] to-[#008080]">
